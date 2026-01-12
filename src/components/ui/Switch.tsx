@@ -27,12 +27,13 @@ const Switch = ({
   checked,
   className = '',
   disabled = false,
+  id,
   label,
   onChange,
   tooltip,
   trackClassName,
 }: SwitchProps) => {
-  const uniqueId = `switch-${label.replace(/\s+/g, '-').toLowerCase()}`;
+  const uniqueId = id || `switch-${label.replace(/\s+/g, '-').toLowerCase()}`;
 
   const spring = {
     type: 'spring',
