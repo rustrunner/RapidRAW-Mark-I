@@ -1365,7 +1365,7 @@ export default function MainLibrary({
       return (
         <div className="flex-1 flex flex-col items-center justify-center h-full rounded-lg bg-bg-primary p-8 text-center">
           <ImageIcon size={80} className="text-accent opacity-20 mb-6 animate-pulse" />
-          <h1 className="text-3xl font-bold text-primary mb-2">RapidRAW</h1>
+          <h1 className="text-3xl font-bold text-primary mb-2">RapidRAW Mod1</h1>
           <p className="text-text-secondary mb-8">Loading settings...</p>
         </div>
       );
@@ -1404,7 +1404,7 @@ export default function MainLibrary({
           ) : (
             <>
               <div className="my-auto text-left">
-                <h1 className="text-5xl font-bold text-text-primary text-shadow-shiny mb-4">RapidRAW</h1>
+                <h1 className="text-5xl font-bold text-text-primary text-shadow-shiny mb-4">RapidRAW Mod1</h1>
                 <p className="text-text-secondary mb-10 max-w-md">
                   {hasLastPath ? (
                     <>

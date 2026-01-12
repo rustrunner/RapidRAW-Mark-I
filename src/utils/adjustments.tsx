@@ -84,6 +84,38 @@ export enum Effect {
   VignetteRoundness = 'vignetteRoundness',
 }
 
+// Low-Light Recovery Adjustments
+export enum LowLightAdjustment {
+  // Hot Pixels
+  HotPixelEnabled = 'hotPixelEnabled',
+  HotPixelThreshold = 'hotPixelThreshold',
+  HotPixelRadius = 'hotPixelRadius',
+  HotPixelMode = 'hotPixelMode',
+  // Denoiser (ISO-adaptive)
+  DenoiseEnabled = 'denoiseEnabled',
+  DenoiseAutoIso = 'denoiseAutoIso',
+  DenoiseStrength = 'denoiseStrength',
+  DenoiseDetail = 'denoiseDetail',
+  DenoiseChroma = 'denoiseChroma',
+}
+
+// Blur Recovery Adjustments
+export enum BlurRecoveryAdjustment {
+  DeblurEnabled = 'deblurEnabled',
+  DeblurType = 'deblurType',
+  DeblurLength = 'deblurLength',
+  DeblurAngle = 'deblurAngle',
+  DeblurRadius = 'deblurRadius',
+  DeblurStrength = 'deblurStrength',
+  DeblurSmoothness = 'deblurSmoothness',
+  DeblurNoiseDamp = 'deblurNoiseDamp',
+  DeblurPreviewSize = 'deblurPreviewSize',
+  DeblurShowKernel = 'deblurShowKernel',
+  DeblurShowAngleOverlay = 'deblurShowAngleOverlay',
+  DeblurIterations = 'deblurIterations',
+  Upscale2xEnabled = 'upscale2xEnabled',
+}
+
 export interface ColorCalibration {
   shadowsTint: number;
   redHue: number;
@@ -149,6 +181,32 @@ export interface Adjustments {
   vignetteMidpoint: number;
   vignetteRoundness: number;
   whites: number;
+  // Low-Light Recovery
+  hotPixelEnabled: boolean;
+  hotPixelThreshold: number;
+  hotPixelRadius: number;
+  hotPixelMode: 'median' | 'interpolate' | 'clone';
+  // Denoiser (ISO-adaptive)
+  denoiseEnabled: boolean;
+  denoiseAutoIso: boolean;
+  denoiseStrength: number;
+  denoiseDetail: number;
+  denoiseChroma: number;
+  denoiseIsoMultiplier: number;
+  // PID Enhancement
+  deblurEnabled: boolean;
+  deblurType: 'motion' | 'focus' | 'gaussian';
+  deblurLength: number;
+  deblurAngle: number;
+  deblurRadius: number;
+  deblurStrength: number;
+  deblurSmoothness: number;
+  deblurNoiseDamp: number;
+  deblurPreviewSize: number;
+  deblurShowKernel: boolean;
+  deblurShowAngleOverlay: boolean;
+  deblurIterations: number;
+  upscale2xEnabled: boolean;
 }
 
 export interface AiPatch {
@@ -230,6 +288,9 @@ export interface MaskAdjustments {
   tint: number;
   vibrance: number;
   whites: number;
+  // PID Enhancement (mask-supported)
+  deblurStrength: number;
+  deblurSmoothness: number;
 }
 
 export interface MaskContainer {
@@ -249,6 +310,9 @@ export interface Sections {
   color: Array<string>;
   details: Array<string>;
   effects: Array<string>;
+  upscale: Array<string>;
+  lowlight: Array<string>;
+  blurrecovery: Array<string>;
 }
 
 export interface SectionVisibility {
@@ -258,6 +322,9 @@ export interface SectionVisibility {
   color: boolean;
   details: boolean;
   effects: boolean;
+  upscale: boolean;
+  lowlight: boolean;
+  blurrecovery: boolean;
 }
 
 export const COLOR_LABELS: Array<Color> = [
@@ -332,6 +399,9 @@ export const INITIAL_MASK_ADJUSTMENTS: MaskAdjustments = {
     color: true,
     details: true,
     effects: true,
+    upscale: true,
+    lowlight: true,
+    blurrecovery: true,
   },
   shadows: 0,
   sharpness: 0,
@@ -340,6 +410,9 @@ export const INITIAL_MASK_ADJUSTMENTS: MaskAdjustments = {
   tint: 0,
   vibrance: 0,
   whites: 0,
+  // PID Enhancement (mask-supported)
+  deblurStrength: 0,
+  deblurSmoothness: 30,
 };
 
 export const INITIAL_MASK_CONTAINER: MaskContainer = {
@@ -423,6 +496,9 @@ export const INITIAL_ADJUSTMENTS: Adjustments = {
     color: true,
     details: true,
     effects: true,
+    upscale: true,
+    lowlight: true,
+    blurrecovery: true,
   },
   shadows: 0,
   sharpness: 0,
@@ -437,6 +513,32 @@ export const INITIAL_ADJUSTMENTS: Adjustments = {
   vignetteMidpoint: 50,
   vignetteRoundness: 0,
   whites: 0,
+  // Low-Light Recovery
+  hotPixelEnabled: false,
+  hotPixelThreshold: 50,
+  hotPixelRadius: 2,
+  hotPixelMode: 'median',
+  // Denoiser (ISO-adaptive)
+  denoiseEnabled: false,
+  denoiseAutoIso: true,
+  denoiseStrength: 50,
+  denoiseDetail: 50,
+  denoiseChroma: 50,
+  denoiseIsoMultiplier: 1.0,
+  // PID Enhancement
+  deblurEnabled: false,
+  deblurType: 'motion',
+  deblurLength: 50,
+  deblurAngle: 0,
+  deblurRadius: 25,
+  deblurStrength: 50,
+  deblurSmoothness: 30,
+  deblurNoiseDamp: 50,
+  deblurPreviewSize: 256,
+  deblurShowKernel: false,
+  deblurShowAngleOverlay: false,
+  deblurIterations: 5,
+  upscale2xEnabled: false,
 };
 
 export const normalizeLoadedAdjustments = (loadedAdjustments: Adjustments): any => {
@@ -536,6 +638,27 @@ export const COPYABLE_ADJUSTMENT_KEYS: Array<string> = [
   Effect.VignetteMidpoint,
   Effect.VignetteRoundness,
   BasicAdjustment.Whites,
+  // Low-Light Recovery
+  LowLightAdjustment.HotPixelEnabled,
+  LowLightAdjustment.HotPixelThreshold,
+  LowLightAdjustment.HotPixelRadius,
+  LowLightAdjustment.HotPixelMode,
+  LowLightAdjustment.DenoiseEnabled,
+  LowLightAdjustment.DenoiseAutoIso,
+  LowLightAdjustment.DenoiseStrength,
+  LowLightAdjustment.DenoiseDetail,
+  LowLightAdjustment.DenoiseChroma,
+  // PID Enhancement
+  BlurRecoveryAdjustment.DeblurEnabled,
+  BlurRecoveryAdjustment.DeblurType,
+  BlurRecoveryAdjustment.DeblurLength,
+  BlurRecoveryAdjustment.DeblurAngle,
+  BlurRecoveryAdjustment.DeblurRadius,
+  BlurRecoveryAdjustment.DeblurStrength,
+  BlurRecoveryAdjustment.DeblurSmoothness,
+  BlurRecoveryAdjustment.DeblurNoiseDamp,
+  BlurRecoveryAdjustment.DeblurPreviewSize,
+  BlurRecoveryAdjustment.DeblurShowKernel,
 ];
 
 export const ADJUSTMENT_SECTIONS: Sections = {
@@ -584,5 +707,33 @@ export const ADJUSTMENT_SECTIONS: Sections = {
     Effect.VignetteFeather,
     Effect.VignetteMidpoint,
     Effect.VignetteRoundness,
+  ],
+  upscale: [
+    BlurRecoveryAdjustment.Upscale2xEnabled,
+  ],
+  lowlight: [
+    LowLightAdjustment.HotPixelEnabled,
+    LowLightAdjustment.HotPixelThreshold,
+    LowLightAdjustment.HotPixelRadius,
+    LowLightAdjustment.HotPixelMode,
+    LowLightAdjustment.DenoiseEnabled,
+    LowLightAdjustment.DenoiseAutoIso,
+    LowLightAdjustment.DenoiseStrength,
+    LowLightAdjustment.DenoiseDetail,
+    LowLightAdjustment.DenoiseChroma,
+  ],
+  blurrecovery: [
+    BlurRecoveryAdjustment.DeblurEnabled,
+    BlurRecoveryAdjustment.DeblurType,
+    BlurRecoveryAdjustment.DeblurLength,
+    BlurRecoveryAdjustment.DeblurAngle,
+    BlurRecoveryAdjustment.DeblurRadius,
+    BlurRecoveryAdjustment.DeblurStrength,
+    BlurRecoveryAdjustment.DeblurSmoothness,
+    BlurRecoveryAdjustment.DeblurNoiseDamp,
+    BlurRecoveryAdjustment.DeblurPreviewSize,
+    BlurRecoveryAdjustment.DeblurShowKernel,
+    BlurRecoveryAdjustment.DeblurIterations,
+    // Note: DeblurShowAngleOverlay is frontend-only, not sent to backend
   ],
 };

@@ -128,7 +128,7 @@ interface CollapsibleSectionsState {
   details: boolean;
   effects: boolean;
   lowlight: boolean;
-  pidenhancement: boolean;
+  blurrecovery: boolean;
 }
 
 interface ConfirmModalState {
@@ -329,7 +329,7 @@ function App() {
     details: false,
     effects: false,
     lowlight: false,
-    pidenhancement: false,
+    blurrecovery: false,
   });
   const [isLibraryExportPanelVisible, setIsLibraryExportPanelVisible] = useState(false);
   const [libraryViewMode, setLibraryViewMode] = useState<LibraryViewMode>(LibraryViewMode.Flat);

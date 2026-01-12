@@ -68,6 +68,7 @@ use crate::file_management::{
 use crate::formats::is_raw_file;
 use crate::image_loader::{
     composite_patches_on_image, load_and_composite, load_base_image_from_bytes,
+    load_base_image_with_exif,
 };
 use crate::image_processing::{
     Crop, GpuContext, ImageMetadata, apply_coarse_rotation, apply_crop, apply_flip, apply_rotation,
@@ -398,10 +399,12 @@ async fn load_image(
         let result: Result<(DynamicImage, HashMap<String, String>), String> = (|| {
             match read_file_mapped(Path::new(&path_clone)) {
                 Ok(mmap) => {
-                    let img =
-                        load_base_image_from_bytes(&mmap, &path_clone, false, highlight_compression)
+                    // Use load_base_image_with_exif to get EXIF from RAW files via rawler
+                    let (img, raw_exif) =
+                        load_base_image_with_exif(&mmap, &path_clone, false, highlight_compression)
                             .map_err(|e| e.to_string())?;
-                    let exif = read_exif_data(&mmap);
+                    // If we got EXIF from rawler (RAW files), use it; otherwise fall back to kamadak-exif
+                    let exif = raw_exif.unwrap_or_else(|| read_exif_data(&mmap));
                     Ok((img, exif))
                 }
                 Err(e) => {
@@ -413,14 +416,16 @@ async fn load_image(
                     let bytes = fs::read(&path_clone).map_err(|io_err| {
                         format!("Fallback read failed for {}: {}", path_clone, io_err)
                     })?;
-                    let img = load_base_image_from_bytes(
+                    // Use load_base_image_with_exif to get EXIF from RAW files via rawler
+                    let (img, raw_exif) = load_base_image_with_exif(
                         &bytes,
                         &path_clone,
                         false,
                         highlight_compression,
                     )
                     .map_err(|e| e.to_string())?;
-                    let exif = read_exif_data(&bytes);
+                    // If we got EXIF from rawler (RAW files), use it; otherwise fall back to kamadak-exif
+                    let exif = raw_exif.unwrap_or_else(|| read_exif_data(&bytes));
                     Ok((img, exif))
                 }
             }
@@ -864,6 +869,22 @@ fn process_image_for_export(
 ) -> Result<DynamicImage, String> {
     let (transformed_image, unscaled_crop_offset) =
         apply_all_transformations(&base_image, &js_adjustments);
+
+    // Apply 2x upscale if enabled (before GPU processing for better deblur results)
+    let upscale_enabled = js_adjustments["upscale2xEnabled"].as_bool().unwrap_or(false);
+    let transformed_image = if upscale_enabled {
+        let (w, h) = transformed_image.dimensions();
+        log::info!("Applying 2x Lanczos upscale: {}x{} -> {}x{}", w, h, w * 2, h * 2);
+        DynamicImage::ImageRgba8(image::imageops::resize(
+            &transformed_image,
+            w * 2,
+            h * 2,
+            image::imageops::FilterType::Lanczos3,
+        ))
+    } else {
+        transformed_image
+    };
+
     let (img_w, img_h) = transformed_image.dimensions();
 
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
@@ -994,6 +1015,65 @@ fn encode_image_to_bytes(
         _ => return Err(format!("Unsupported file format: {}", output_format)),
     };
     Ok(image_bytes)
+}
+
+#[tauri::command]
+async fn upscale_and_save_image(
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let settings = {
+        let lock = state.original_image.lock().unwrap();
+        lock.as_ref()
+            .map(|img| (img.image.clone(), img.is_raw))
+            .ok_or_else(|| "No image loaded".to_string())?
+    };
+    let (original_image, _is_raw) = settings;
+
+    let (w, h) = original_image.dimensions();
+    log::info!("Upscaling image: {}x{} -> {}x{}", w, h, w * 2, h * 2);
+
+    let upscaled = tokio::task::spawn_blocking(move || {
+        DynamicImage::ImageRgba8(image::imageops::resize(
+            &original_image,
+            w * 2,
+            h * 2,
+            image::imageops::FilterType::Lanczos3,
+        ))
+    })
+    .await
+    .map_err(|e| format!("Upscale task failed: {}", e))?;
+
+    let source_path = Path::new(&path);
+    let stem = source_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("image");
+    let extension = source_path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("png");
+    let parent = source_path.parent().unwrap_or(Path::new("."));
+
+    let new_filename = format!("{}_upscaled.{}", stem, extension);
+    let output_path = parent.join(&new_filename);
+    let output_path_str = output_path.to_string_lossy().to_string();
+
+    let ext_lower = extension.to_lowercase();
+    let format = match ext_lower.as_str() {
+        "jpg" | "jpeg" => ImageFormat::Jpeg,
+        "png" => ImageFormat::Png,
+        "webp" => ImageFormat::WebP,
+        "tiff" | "tif" => ImageFormat::Tiff,
+        _ => ImageFormat::Png,
+    };
+
+    upscaled
+        .save_with_format(&output_path, format)
+        .map_err(|e| format!("Failed to save upscaled image: {}", e))?;
+
+    log::info!("Upscaled image saved to: {}", output_path_str);
+    Ok(output_path_str)
 }
 
 #[tauri::command]
@@ -3023,6 +3103,7 @@ fn main() {
 
             let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_cfg)
                 .unwrap()
+                .title("RapidRAW Mod1")
                 .transparent(transparent)
                 .decorations(decorations)
                 .build()
@@ -3053,6 +3134,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             load_image,
             apply_adjustments,
+            upscale_and_save_image,
             export_image,
             batch_export_images,
             cancel_export,

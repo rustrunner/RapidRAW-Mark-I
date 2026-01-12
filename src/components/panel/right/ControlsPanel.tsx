@@ -4,6 +4,9 @@ import CurveGraph from '../../adjustments/Curves';
 import ColorPanel from '../../adjustments/Color';
 import DetailsPanel from '../../adjustments/Details';
 import EffectsPanel from '../../adjustments/Effects';
+import LowLightRecoveryPanel from '../../adjustments/LowLightRecovery';
+import BlurRecoveryPanel from '../../adjustments/BlurRecovery';
+import UpscalePanel from '../../adjustments/Upscale';
 import CollapsibleSection from '../../ui/CollapsibleSection';
 import { Adjustments, SectionVisibility, INITIAL_ADJUSTMENTS, ADJUSTMENT_SECTIONS } from '../../../utils/adjustments';
 import { useContextMenu } from '../../../context/ContextMenuContext';
@@ -33,6 +36,10 @@ interface ControlsProps {
   appSettings: AppSettings | null;
   isWbPickerActive?: boolean;
   toggleWbPicker?: () => void;
+  onApplyUpscale?: () => void;
+  isUpscaled?: boolean;
+  isUpscaling?: boolean;
+  imageIso?: number | null;
 }
 
 export default function Controls({
@@ -50,6 +57,10 @@ export default function Controls({
   appSettings,
   isWbPickerActive,
   toggleWbPicker,
+  onApplyUpscale,
+  isUpscaled,
+  isUpscaling,
+  imageIso,
 }: ControlsProps) {
   const { showContextMenu } = useContextMenu();
 
@@ -79,8 +90,29 @@ export default function Controls({
     }));
   };
 
+  // Accordion behavior: only one section open at a time
   const handleToggleSection = (section: string) => {
-    setCollapsibleState((prev: any) => ({ ...prev, [section]: !prev[section] }));
+    setCollapsibleState((prev: any) => {
+      const isCurrentlyOpen = prev[section];
+      // Close all sections, then open the clicked one (if it was closed)
+      const allClosed = Object.keys(prev).reduce((acc: any, key: string) => {
+        acc[key] = false;
+        return acc;
+      }, {});
+      return { ...allClosed, [section]: !isCurrentlyOpen };
+    });
+  };
+
+  // Title mapping for display names
+  const sectionTitles: { [key: string]: string } = {
+    basic: 'Basic',
+    curves: 'Curves',
+    color: 'Color',
+    details: 'Details',
+    effects: 'Effects',
+    upscale: 'Upscale',
+    lowlight: 'Low-Light',
+    blurrecovery: 'Blur Recovery',
   };
 
   const handleSectionContextMenu = (event: any, sectionName: string) => {
@@ -187,9 +219,12 @@ export default function Controls({
             color: ColorPanel,
             details: DetailsPanel,
             effects: EffectsPanel,
+            upscale: UpscalePanel,
+            lowlight: LowLightRecoveryPanel,
+            blurrecovery: BlurRecoveryPanel,
           }[sectionName];
 
-          const title = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+          const title = sectionTitles[sectionName] || sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
           const sectionVisibility = adjustments.sectionVisibility || INITIAL_ADJUSTMENTS.sectionVisibility;
 
           return (
@@ -211,6 +246,10 @@ export default function Controls({
                   appSettings={appSettings}
                   isWbPickerActive={isWbPickerActive}
                   toggleWbPicker={toggleWbPicker}
+                  onApplyUpscale={onApplyUpscale}
+                  isUpscaled={isUpscaled}
+                  isUpscaling={isUpscaling}
+                  imageIso={imageIso}
                 />
               </CollapsibleSection>
             </div>
