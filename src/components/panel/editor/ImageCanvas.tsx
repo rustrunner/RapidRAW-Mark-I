@@ -504,6 +504,10 @@ const ImageCanvas = memo(
     const imagePathRef = useRef<string | null>(null);
     const latestEditedUrlRef = useRef<string | null>(null);
 
+    // Capture a snapshot of the image when it first loads (for split view "Original" pane)
+    const [originalSnapshot, setOriginalSnapshot] = useState<string | null>(null);
+    const lastPathForSnapshotRef = useRef<string | null>(null);
+
     const isDrawing = useRef(false);
     const currentLine = useRef<DrawnLine | null>(null);
     const [previewLine, setPreviewLine] = useState<DrawnLine | null>(null);
@@ -628,6 +632,23 @@ const ImageCanvas = memo(
         return () => clearTimeout(timer);
       }
     }, [layers]);
+
+    // Capture snapshot of image when it first loads (for split view Original pane)
+    useEffect(() => {
+      const currentPath = selectedImage.path;
+
+      // Image changed - clear snapshot and wait for new preview
+      if (currentPath !== lastPathForSnapshotRef.current) {
+        lastPathForSnapshotRef.current = currentPath;
+        setOriginalSnapshot(null);
+        return;
+      }
+
+      // Capture first available preview as the "original" snapshot
+      if (originalSnapshot === null && finalPreviewUrl) {
+        setOriginalSnapshot(finalPreviewUrl);
+      }
+    }, [selectedImage.path, finalPreviewUrl, originalSnapshot]);
 
     const handleTransitionEnd = useCallback((finishedId: string) => {
       setLayers((prev: Array<ImageLayer>) => {
@@ -1073,36 +1094,32 @@ const ImageCanvas = memo(
             {/* Split View Mode */}
             {splitView ? (
               <div className="absolute inset-0 w-full h-full flex">
-                {/* Original Image (Left) */}
+                {/* Original Image (Left) - snapshot of image when first loaded */}
                 <div className="w-1/2 h-full relative overflow-hidden border-r border-white/20">
-                  {(transformedOriginalUrl || selectedImage.originalUrl || selectedImage.thumbnailUrl) && (
-                    <img
-                      alt="Original"
-                      className="absolute inset-0 w-full h-full object-contain"
-                      src={transformedOriginalUrl || selectedImage.originalUrl || selectedImage.thumbnailUrl}
-                      style={{
-                        imageRendering: 'high-quality',
-                        WebkitImageRendering: 'high-quality',
-                      }}
-                    />
-                  )}
+                  <img
+                    alt="Original"
+                    className="absolute inset-0 w-full h-full object-contain"
+                    src={originalSnapshot || finalPreviewUrl || ''}
+                    style={{
+                      imageRendering: 'high-quality',
+                      WebkitImageRendering: 'high-quality',
+                    }}
+                  />
                   <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                     Original
                   </div>
                 </div>
-                {/* Edited Image (Right) */}
+                {/* Edited Image (Right) - live preview with all edits */}
                 <div className="w-1/2 h-full relative overflow-hidden">
-                  {(finalPreviewUrl || fullResolutionUrl) && (
-                    <img
-                      alt="Edited"
-                      className="absolute inset-0 w-full h-full object-contain"
-                      src={fullResolutionUrl || finalPreviewUrl || ''}
-                      style={{
-                        imageRendering: 'high-quality',
-                        WebkitImageRendering: 'high-quality',
-                      }}
-                    />
-                  )}
+                  <img
+                    alt="Edited"
+                    className="absolute inset-0 w-full h-full object-contain"
+                    src={fullResolutionUrl || finalPreviewUrl || ''}
+                    style={{
+                      imageRendering: 'high-quality',
+                      WebkitImageRendering: 'high-quality',
+                    }}
+                  />
                   <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                     Edited
                   </div>

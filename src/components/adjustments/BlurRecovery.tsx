@@ -92,10 +92,10 @@ export default function BlurRecoveryPanel({
                     <label className="text-sm font-medium text-text-primary mb-1 block">Blur Length (px)</label>
                     <div className="flex gap-1 flex-wrap">
                       {[
+                        { label: '25', value: 25 },
                         { label: '50', value: 50 },
+                        { label: '75', value: 75 },
                         { label: '100', value: 100 },
-                        { label: '150', value: 150 },
-                        { label: '200', value: 200 },
                       ].map((option) => (
                         <button
                           key={option.value}
