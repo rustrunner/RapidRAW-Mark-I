@@ -83,6 +83,7 @@ import {
 import { generatePaletteFromImage } from './utils/palette';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { THEMES, DEFAULT_THEME_ID, ThemeProps } from './utils/themes';
+import { safeJsonParse } from './utils/json';
 import { SubMask, ToolType } from './components/panel/right/Masks';
 import {
   EXPORT_TIMEOUT,
@@ -118,7 +119,11 @@ import {
 } from './components/ui/AppProperties';
 import { ChannelConfig } from './components/adjustments/Curves';
 
-const CLERK_PUBLISHABLE_KEY = 'pk_test_YnJpZWYtc2Vhc25haWwtMTIuY2xlcmsuYWNjb3VudHMuZGV2JA'; // local dev key
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!CLERK_PUBLISHABLE_KEY) {
+  console.error('Missing VITE_CLERK_PUBLISHABLE_KEY environment variable. Check your .env file.');
+}
 
 interface CollapsibleSectionsState {
   [key: string]: boolean;
@@ -668,7 +673,10 @@ function App() {
           useFastInpaint: useFastInpaint,
         });
 
-        const newPatchData = JSON.parse(newPatchDataJson);
+        const newPatchData = safeJsonParse(newPatchDataJson, null);
+        if (!newPatchData) {
+          throw new Error('Failed to parse AI patch data from backend.');
+        }
         setAdjustments((prev: Adjustments) => ({
           ...prev,
           aiPatches: prev.aiPatches.map((p: AiPatch) =>
@@ -762,7 +770,7 @@ function App() {
           useFastInpaint: true,
         });
 
-        const newPatchData = JSON.parse(newPatchDataJson);
+        const newPatchData = safeJsonParse(newPatchDataJson, null);
         if (!newPatchData?.color || !newPatchData?.mask) {
           throw new Error('Inpainting failed to return a valid result.');
         }

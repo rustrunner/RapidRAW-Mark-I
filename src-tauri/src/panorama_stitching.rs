@@ -60,7 +60,7 @@ pub fn stitch_images(image_paths: Vec<String>, app_handle: AppHandle) -> Result<
     let start_time = Instant::now();
     let _ = app_handle.emit("panorama-progress", "Loading and preparing images...");
     println!("Loading and preparing images (in parallel)...");
-    let brief_pairs = processing::generate_brief_pairs();
+    let brief_pairs = processing::generate_brief_pairs()?;
 
     let image_data_results: Vec<Result<ImageInfo, String>> = image_paths
         .par_iter()
@@ -225,7 +225,7 @@ pub fn stitch_images(image_paths: Vec<String>, app_handle: AppHandle) -> Result<
     let _ = app_handle.emit("panorama-progress", "Determining stitching order...");
     println!("Determining stitching order...");
     let (ordered_indices, global_homographies) =
-        build_stitching_order(&image_data, &pairwise_matches);
+        build_stitching_order(&image_data, &pairwise_matches)?;
 
     if ordered_indices.len() < 2 {
         return Err("Could not find a connected sequence of at least two images.".to_string());
@@ -312,9 +312,9 @@ impl DSU {
 fn build_stitching_order(
     images: &[ImageInfo],
     matches: &HashMap<(usize, usize), MatchInfo>,
-) -> (Vec<usize>, HashMap<usize, Matrix3<f64>>) {
+) -> Result<(Vec<usize>, HashMap<usize, Matrix3<f64>>), String> {
     if images.is_empty() {
-        return (vec![], HashMap::new());
+        return Ok((vec![], HashMap::new()));
     }
     let n = images.len();
     if n < 2 {
@@ -322,7 +322,7 @@ fn build_stitching_order(
         if n == 1 {
             homographies.insert(0, Matrix3::identity());
         }
-        return ((0..n).collect(), homographies);
+        return Ok(((0..n).collect(), homographies));
     }
 
     let mut edges = Vec::new();
@@ -374,9 +374,9 @@ fn build_stitching_order(
                     } else if let Some(m) = matches.get(&(u, v)) {
                         m.homography
                             .try_inverse()
-                            .expect("Failed to invert homography for MST edge")
+                            .ok_or_else(|| format!("Failed to invert homography for MST edge between {} and {}", u, v))?
                     } else {
-                        panic!("Match not found for MST edge between {} and {}", u, v);
+                        return Err(format!("Match not found for MST edge between {} and {}", u, v));
                     };
 
                     let h_v_global = h_u_global * h_vu;
@@ -386,5 +386,5 @@ fn build_stitching_order(
         }
     }
 
-    (ordered_indices, global_homographies)
+    Ok((ordered_indices, global_homographies))
 }

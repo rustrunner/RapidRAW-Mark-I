@@ -216,7 +216,7 @@ export function usePresets(currentAdjustments: Adjustments) {
       }
 
       const newPreset = {
-        adjustments: JSON.parse(JSON.stringify(presetToDuplicate.adjustments)),
+        adjustments: structuredClone(presetToDuplicate.adjustments),
         id: crypto.randomUUID(),
         name: `${presetToDuplicate.name} Copy`,
       };
@@ -366,7 +366,7 @@ export function usePresets(currentAdjustments: Adjustments) {
 
   const sortAllPresetsAlphabetically = useCallback(() => {
     setPresets((currentPresets) => {
-      const newPresets: Array<UserPreset> = JSON.parse(JSON.stringify(currentPresets));
+      const newPresets: Array<UserPreset> = structuredClone(currentPresets);
       const sortOptions = { numeric: true, sensitivity: 'base' };
 
       newPresets.forEach((item: UserPreset) => {

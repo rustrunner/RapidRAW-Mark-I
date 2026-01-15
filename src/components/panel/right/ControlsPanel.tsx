@@ -114,7 +114,7 @@ export default function Controls({
       const adjustmentsToCopy: any = {};
       for (const key of sectionKeys) {
         if (adjustments.hasOwnProperty(key)) {
-          adjustmentsToCopy[key] = JSON.parse(JSON.stringify(adjustments[key]));
+          adjustmentsToCopy[key] = structuredClone(adjustments[key]);
         }
       }
       setCopiedSectionAdjustments({ section: sectionName, values: adjustmentsToCopy });
@@ -133,7 +133,7 @@ export default function Controls({
     const handleReset = () => {
       const resetValues: any = {};
       for (const key of sectionKeys) {
-        resetValues[key] = JSON.parse(JSON.stringify(INITIAL_ADJUSTMENTS[key]));
+        resetValues[key] = structuredClone(INITIAL_ADJUSTMENTS[key]);
       }
       setAdjustments((prev: Adjustments) => ({
         ...prev,

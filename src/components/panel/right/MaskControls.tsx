@@ -402,7 +402,7 @@ export default function MaskControls({
       const adjustmentsToCopy: Record<string, any> = {};
       for (const key of sectionKeys) {
         if (editingMask.adjustments.hasOwnProperty(key)) {
-          adjustmentsToCopy[key] = JSON.parse(JSON.stringify(editingMask.adjustments[key]));
+          adjustmentsToCopy[key] = structuredClone(editingMask.adjustments[key]);
         }
       }
       setCopiedSectionAdjustments({ section: sectionName, values: adjustmentsToCopy });
@@ -422,7 +422,7 @@ export default function MaskControls({
     const handleReset = () => {
       const resetValues: any = {};
       for (const key of sectionKeys) {
-        resetValues[key] = JSON.parse(JSON.stringify(INITIAL_MASK_ADJUSTMENTS[key]));
+        resetValues[key] = structuredClone(INITIAL_MASK_ADJUSTMENTS[key]);
       }
       setMaskContainerAdjustments((prev: any) => ({
         ...prev,

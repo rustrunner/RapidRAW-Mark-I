@@ -251,7 +251,7 @@ export default function MasksPanel({
   };
 
   const handleDuplicateContainer = (containerToDuplicate: MaskContainer) => {
-    const newContainer = JSON.parse(JSON.stringify(containerToDuplicate));
+    const newContainer = structuredClone(containerToDuplicate);
     newContainer.id = uuidv4();
     newContainer.name = `${containerToDuplicate.name} Copy`;
     newContainer.subMasks = newContainer.subMasks.map((sm: SubMask) => ({ ...sm, id: uuidv4() }));
@@ -262,7 +262,7 @@ export default function MasksPanel({
     if (!copiedMask) {
       return;
     }
-    const newContainer = JSON.parse(JSON.stringify(copiedMask));
+    const newContainer = structuredClone(copiedMask);
     newContainer.id = uuidv4();
     newContainer.subMasks = newContainer.subMasks.map((sm: SubMask) => ({ ...sm, id: uuidv4() }));
     setAdjustments((prev: Partial<Adjustments>) => ({ ...prev, masks: [...(prev.masks || []), newContainer] }));
@@ -275,7 +275,7 @@ export default function MasksPanel({
     setAdjustments((prev: Partial<Adjustments>) => ({
       ...prev,
       masks: prev.masks?.map((c: MaskContainer) =>
-        c.id === targetContainerId ? { ...c, adjustments: JSON.parse(JSON.stringify(copiedMask.adjustments)) } : c,
+        c.id === targetContainerId ? { ...c, adjustments: structuredClone(copiedMask.adjustments) } : c,
       ),
     }));
   };
