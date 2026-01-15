@@ -460,8 +460,6 @@ export default function AIControls({
         </div>
 
         <CollapsibleSection
-          canToggleVisibility={false}
-          isContentVisible={true}
           isOpen={isSettingsSectionOpen}
           onToggle={() => setSettingsSectionOpen((prev: any) => !prev)}
           title="Selection Properties"

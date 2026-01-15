@@ -64,19 +64,6 @@ export default function Controls({
 }: ControlsProps) {
   const { showContextMenu } = useContextMenu();
 
-  const handleToggleVisibility = (sectionName: string) => {
-    setAdjustments((prev: Adjustments) => {
-      const currentVisibility: SectionVisibility = prev.sectionVisibility || INITIAL_ADJUSTMENTS.sectionVisibility;
-      return {
-        ...prev,
-        sectionVisibility: {
-          ...currentVisibility,
-          [sectionName]: !currentVisibility[sectionName],
-        },
-      };
-    });
-  };
-
   const handleResetAdjustments = () => {
     setAdjustments((prev: Adjustments) => ({
       ...prev,
@@ -86,7 +73,6 @@ export default function Controls({
           acc[key] = INITIAL_ADJUSTMENTS[key];
           return acc;
         }, {}),
-      sectionVisibility: { ...INITIAL_ADJUSTMENTS.sectionVisibility },
     }));
   };
 
@@ -141,10 +127,6 @@ export default function Controls({
       setAdjustments((prev: Adjustments) => ({
         ...prev,
         ...copiedSectionAdjustments.values,
-        sectionVisibility: {
-          ...(prev.sectionVisibility || INITIAL_ADJUSTMENTS.sectionVisibility),
-          [sectionName]: true,
-        },
       }));
     };
 
@@ -156,10 +138,6 @@ export default function Controls({
       setAdjustments((prev: Adjustments) => ({
         ...prev,
         ...resetValues,
-        sectionVisibility: {
-          ...(prev.sectionVisibility || INITIAL_ADJUSTMENTS.sectionVisibility),
-          [sectionName]: true,
-        },
       }));
     };
 
@@ -225,16 +203,13 @@ export default function Controls({
           }[sectionName];
 
           const title = sectionTitles[sectionName] || sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-          const sectionVisibility = adjustments.sectionVisibility || INITIAL_ADJUSTMENTS.sectionVisibility;
 
           return (
             <div className="flex-shrink-0 group" key={sectionName}>
               <CollapsibleSection
-                isContentVisible={sectionVisibility[sectionName]}
                 isOpen={collapsibleState[sectionName]}
                 onContextMenu={(e: any) => handleSectionContextMenu(e, sectionName)}
                 onToggle={() => handleToggleSection(sectionName)}
-                onToggleVisibility={() => handleToggleVisibility(sectionName)}
                 title={title}
               >
                 <SectionComponent

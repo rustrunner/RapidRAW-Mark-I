@@ -297,10 +297,6 @@ export default function MaskControls({
             ...c.adjustments,
             ...presetAdjustments,
           };
-          newMaskAdjustments.sectionVisibility = {
-            ...c.adjustments.sectionVisibility,
-            ...presetAdjustments.sectionVisibility,
-          };
           return { ...c, adjustments: newMaskAdjustments };
         }
         return c;
@@ -384,16 +380,6 @@ export default function MaskControls({
     });
   };
 
-  const handleToggleVisibility = (sectionName: string) => {
-    const currentAdjustments = editingMask.adjustments;
-    const currentVisibility = currentAdjustments.sectionVisibility || INITIAL_MASK_ADJUSTMENTS.sectionVisibility;
-    const newAdjustments = {
-      ...currentAdjustments,
-      sectionVisibility: { ...currentVisibility, [sectionName]: !currentVisibility[sectionName] },
-    };
-    updateMask(editingMask.id, { adjustments: newAdjustments });
-  };
-
   const handleSubMaskParameterChange = (key: string, value: number) => {
     if (!activeSubMask) {
       return;
@@ -430,10 +416,6 @@ export default function MaskControls({
       setMaskContainerAdjustments((prev: any) => ({
         ...prev,
         ...copiedSectionAdjustments.values,
-        sectionVisibility: {
-          ...(prev.sectionVisibility || INITIAL_MASK_ADJUSTMENTS.sectionVisibility),
-          [sectionName]: true,
-        },
       }));
     };
 
@@ -445,10 +427,6 @@ export default function MaskControls({
       setMaskContainerAdjustments((prev: any) => ({
         ...prev,
         ...resetValues,
-        sectionVisibility: {
-          ...(prev.sectionVisibility || INITIAL_MASK_ADJUSTMENTS.sectionVisibility),
-          [sectionName]: true,
-        },
       }));
     };
 
@@ -483,7 +461,6 @@ export default function MaskControls({
     (activeSubMask.type === Mask.AiSubject ||
       activeSubMask.type === Mask.AiForeground ||
       activeSubMask.type === Mask.AiSky);
-  const sectionVisibility = editingMask.adjustments.sectionVisibility || INITIAL_MASK_ADJUSTMENTS.sectionVisibility;
 
   return (
     <>
@@ -590,8 +567,6 @@ export default function MaskControls({
 
       <div className="p-4 flex flex-col gap-2 border-t border-surface">
         <CollapsibleSection
-          canToggleVisibility={false}
-          isContentVisible={true}
           isOpen={isSettingsSectionOpen}
           onToggle={() => setSettingsSectionOpen((prev: any) => !prev)}
           title="Mask Properties"
@@ -676,12 +651,10 @@ export default function MaskControls({
             const title = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
             return (
               <CollapsibleSection
-                isContentVisible={sectionVisibility[sectionName]}
                 isOpen={collapsibleState[sectionName]}
                 key={sectionName}
                 onContextMenu={(e: any) => handleSectionContextMenu(e, sectionName)}
                 onToggle={() => handleToggleSection(sectionName)}
-                onToggleVisibility={() => handleToggleVisibility(sectionName)}
                 title={title}
               >
                 <SectionComponent
