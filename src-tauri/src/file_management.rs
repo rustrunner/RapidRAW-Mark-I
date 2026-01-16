@@ -20,6 +20,7 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Luma};
 use little_exif::exif_tag::ExifTag;
 use little_exif::metadata::Metadata;
 use num_cpus;
+use once_cell::sync::Lazy;
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 use regex::Regex;
@@ -28,6 +29,22 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 use walkdir::WalkDir;
+
+// Static regex patterns for sidecar file matching (compiled once at startup)
+static SIDECAR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(.*)\.([a-f0-9]{6})\.rrdata$")
+        .expect("Invalid sidecar regex - this is a compile-time bug")
+});
+
+static ORIGINAL_SIDECAR_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^(.*)\.rrdata$")
+        .expect("Invalid original sidecar regex - this is a compile-time bug")
+});
+
+static XMP_EXTRACT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?s)s.xmp = "(.*)""#)
+        .expect("Invalid XMP extract regex - this is a compile-time bug")
+});
 
 use crate::AppState;
 use crate::formats::{is_raw_file, is_supported_image_file};
@@ -427,9 +444,6 @@ pub fn list_images_in_dir(path: String) -> Result<Vec<ImageFile>, String> {
     let mut image_files = HashMap::new();
     let mut sidecars_by_source = HashMap::new();
 
-    let sidecar_re = Regex::new(r"^(.*)\.([a-f0-9]{6})\.rrdata$").unwrap();
-    let original_sidecar_re = Regex::new(r"^(.*)\.rrdata$").unwrap();
-
     for entry in entries.filter_map(Result::ok) {
         let entry_path = entry.path();
         let file_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
@@ -438,7 +452,7 @@ pub fn list_images_in_dir(path: String) -> Result<Vec<ImageFile>, String> {
             let path_str = entry_path.to_string_lossy().into_owned();
             image_files.insert(path_str, entry_path.clone());
         } else if file_name.ends_with(".rrdata") {
-            if let Some(caps) = sidecar_re.captures(&file_name) {
+            if let Some(caps) = SIDECAR_RE.captures(&file_name) {
                 let source_filename = caps.get(1).map_or("", |m| m.as_str());
                 let copy_id = caps.get(2).map_or("", |m| m.as_str());
                 let source_path = Path::new(&path).join(source_filename);
@@ -446,7 +460,7 @@ pub fn list_images_in_dir(path: String) -> Result<Vec<ImageFile>, String> {
                     .entry(source_path.to_string_lossy().into_owned())
                     .or_insert_with(Vec::new)
                     .push(Some(copy_id.to_string()));
-            } else if let Some(caps) = original_sidecar_re.captures(&file_name) {
+            } else if let Some(caps) = ORIGINAL_SIDECAR_RE.captures(&file_name) {
                 let source_filename = caps.get(1).map_or("", |m| m.as_str());
                 let source_path = Path::new(&path).join(source_filename);
                 sidecars_by_source
@@ -512,22 +526,19 @@ pub fn list_images_recursive(path: String) -> Result<Vec<ImageFile>, String> {
     let mut image_files = HashMap::new();
     let mut sidecars_by_source = HashMap::new();
 
-    let sidecar_re = Regex::new(r"^(.*)\.([a-f0-9]{6})\.rrdata$").unwrap();
-    let original_sidecar_re = Regex::new(r"^(.*)\.rrdata$").unwrap();
-
     for entry in WalkDir::new(root_path).into_iter().filter_map(Result::ok) {
         let entry_path = entry.path();
         if !entry_path.is_file() {
             continue;
         }
-        
+
         let file_name = entry_path.file_name().unwrap_or_default().to_string_lossy();
 
         if is_supported_image_file(&entry_path.to_string_lossy()) {
             let path_str = entry_path.to_string_lossy().into_owned();
             image_files.insert(path_str, entry_path.to_path_buf());
         } else if file_name.ends_with(".rrdata") {
-            if let Some(caps) = sidecar_re.captures(&file_name) {
+            if let Some(caps) = SIDECAR_RE.captures(&file_name) {
                 let source_filename = caps.get(1).map_or("", |m| m.as_str());
                 let copy_id = caps.get(2).map_or("", |m| m.as_str());
                 if let Some(parent) = entry_path.parent() {
@@ -537,7 +548,7 @@ pub fn list_images_recursive(path: String) -> Result<Vec<ImageFile>, String> {
                         .or_insert_with(Vec::new)
                         .push(Some(copy_id.to_string()));
                 }
-            } else if let Some(caps) = original_sidecar_re.captures(&file_name) {
+            } else if let Some(caps) = ORIGINAL_SIDECAR_RE.captures(&file_name) {
                 let source_filename = caps.get(1).map_or("", |m| m.as_str());
                 if let Some(parent) = entry_path.parent() {
                     let source_path = parent.join(source_filename);
@@ -847,14 +858,15 @@ pub fn generate_thumbnail_data(
             let gpu_adjustments = get_all_adjustments_from_json(&meta.adjustments, is_raw);
             let lut_path = meta.adjustments["lutPath"].as_str();
             let lut = lut_path.and_then(|p| {
-                let mut cache = state.lut_cache.lock().unwrap();
-                if let Some(cached_lut) = cache.get(p) {
-                    return Some(cached_lut.clone());
-                }
-                if let Ok(loaded_lut) = crate::lut_processing::parse_lut_file(p) {
-                    let arc_lut = Arc::new(loaded_lut);
-                    cache.insert(p.to_string(), arc_lut.clone());
-                    return Some(arc_lut);
+                if let Ok(mut cache) = state.lut_cache.lock() {
+                    if let Some(cached_lut) = cache.get(p) {
+                        return Some(cached_lut.clone());
+                    }
+                    if let Ok(loaded_lut) = crate::lut_processing::parse_lut_file(p) {
+                        let arc_lut = Arc::new(loaded_lut);
+                        cache.insert(p.to_string(), arc_lut.clone());
+                        return Some(arc_lut);
+                    }
                 }
                 None
             });
@@ -1023,7 +1035,7 @@ pub fn generate_thumbnails_progressive(
     let pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build()
-        .unwrap();
+        .map_err(|e| format!("Failed to create thread pool: {}", e))?;
     let cache_dir = app_handle
         .path()
         .app_cache_dir()
@@ -1242,11 +1254,20 @@ pub fn copy_files(source_paths: Vec<String>, destination_folder: String) -> Resu
                 }
                 counter += 1;
             };
-            let new_filename = new_base_path.file_name().unwrap().to_string_lossy();
+            let new_filename = new_base_path
+                .file_name()
+                .ok_or("Could not get new filename")?
+                .to_string_lossy();
 
             for original_file in all_files_to_copy {
-                let original_full_filename = original_file.file_name().unwrap().to_string_lossy();
-                let source_base_filename = source_image_path.file_name().unwrap().to_string_lossy();
+                let original_full_filename = original_file
+                    .file_name()
+                    .ok_or("Could not get original filename")?
+                    .to_string_lossy();
+                let source_base_filename = source_image_path
+                    .file_name()
+                    .ok_or("Could not get source base filename")?
+                    .to_string_lossy();
                 let new_dest_filename = original_full_filename.replacen(&*source_base_filename, &*new_filename, 1);
                 let final_dest_path = dest_path.join(new_dest_filename);
 
@@ -1343,17 +1364,19 @@ pub fn save_metadata_and_update_thumbnail(
     let json_string = serde_json::to_string_pretty(&metadata).map_err(|e| e.to_string())?;
     std::fs::write(sidecar_path, json_string).map_err(|e| e.to_string())?;
 
-    let loaded_image_lock = state.original_image.lock().unwrap();
-    let preloaded_image_option = if let Some(loaded_image) = loaded_image_lock.as_ref() {
-        if loaded_image.path == source_path_str {
-            Some(loaded_image.image.clone())
+    let preloaded_image_option = if let Ok(loaded_image_lock) = state.original_image.lock() {
+        if let Some(loaded_image) = loaded_image_lock.as_ref() {
+            if loaded_image.path == source_path_str {
+                Some(loaded_image.image.clone())
+            } else {
+                None
+            }
         } else {
             None
         }
     } else {
         None
     };
-    drop(loaded_image_lock);
 
     let gpu_context = gpu_processing::get_or_init_gpu_context(&state).ok();
     let app_handle_clone = app_handle.clone();
@@ -1365,10 +1388,19 @@ pub fn save_metadata_and_update_thumbnail(
             serde_json::json!({ "completed": 0, "total": 1 }),
         );
 
-        let cache_dir = app_handle_clone.path().app_cache_dir().unwrap();
+        let cache_dir = match app_handle_clone.path().app_cache_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Failed to get app cache dir: {}", e);
+                return;
+            }
+        };
         let thumb_cache_dir = cache_dir.join("thumbnails");
         if !thumb_cache_dir.exists() {
-            fs::create_dir_all(&thumb_cache_dir).unwrap();
+            if let Err(e) = fs::create_dir_all(&thumb_cache_dir) {
+                eprintln!("Failed to create thumbnail cache dir: {}", e);
+                return;
+            }
         }
 
         let result = generate_single_thumbnail_and_cache(
@@ -1438,10 +1470,19 @@ pub fn apply_adjustments_to_paths(
 
     thread::spawn(move || {
         let state = app_handle.state::<AppState>();
-        let cache_dir = app_handle.path().app_cache_dir().unwrap();
+        let cache_dir = match app_handle.path().app_cache_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Failed to get app cache dir: {}", e);
+                return;
+            }
+        };
         let thumb_cache_dir = cache_dir.join("thumbnails");
         if !thumb_cache_dir.exists() {
-            fs::create_dir_all(&thumb_cache_dir).unwrap();
+            if let Err(e) = fs::create_dir_all(&thumb_cache_dir) {
+                eprintln!("Failed to create thumbnail cache dir: {}", e);
+                return;
+            }
         }
 
         let gpu_context = gpu_processing::get_or_init_gpu_context(&state).ok();
@@ -1508,10 +1549,19 @@ pub fn reset_adjustments_for_paths(
 
     thread::spawn(move || {
         let state = app_handle.state::<AppState>();
-        let cache_dir = app_handle.path().app_cache_dir().unwrap();
+        let cache_dir = match app_handle.path().app_cache_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Failed to get app cache dir: {}", e);
+                return;
+            }
+        };
         let thumb_cache_dir = cache_dir.join("thumbnails");
         if !thumb_cache_dir.exists() {
-            fs::create_dir_all(&thumb_cache_dir).unwrap();
+            if let Err(e) = fs::create_dir_all(&thumb_cache_dir) {
+                eprintln!("Failed to create thumbnail cache dir: {}", e);
+                return;
+            }
         }
 
         let gpu_context = gpu_processing::get_or_init_gpu_context(&state).ok();
@@ -1625,10 +1675,19 @@ pub fn apply_auto_adjustments_to_paths(
 
     thread::spawn(move || {
         let state = app_handle.state::<AppState>();
-        let cache_dir = app_handle.path().app_cache_dir().unwrap();
+        let cache_dir = match app_handle.path().app_cache_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                eprintln!("Failed to get app cache dir: {}", e);
+                return;
+            }
+        };
         let thumb_cache_dir = cache_dir.join("thumbnails");
         if !thumb_cache_dir.exists() {
-            fs::create_dir_all(&thumb_cache_dir).unwrap();
+            if let Err(e) = fs::create_dir_all(&thumb_cache_dir) {
+                eprintln!("Failed to create thumbnail cache dir: {}", e);
+                return;
+            }
         }
 
         let gpu_context = gpu_processing::get_or_init_gpu_context(&state).ok();
@@ -1838,8 +1897,7 @@ pub fn handle_import_legacy_presets_from_file(
         .map_err(|e| format!("Failed to read legacy preset file: {}", e))?;
 
     let xmp_content = if file_path.to_lowercase().ends_with(".lrtemplate") {
-        let re = Regex::new(r#"(?s)s.xmp = "(.*)""#).unwrap();
-        if let Some(caps) = re.captures(&content) {
+        if let Some(caps) = XMP_EXTRACT_RE.captures(&content) {
             caps.get(1)
                 .map(|m| m.as_str().replace(r#"\""#, r#"""#))
                 .unwrap_or(content)
@@ -2433,8 +2491,14 @@ pub fn rename_files(paths: Vec<String>, name_template: String) -> Result<Vec<Str
     let mut sidecar_operations: HashMap<PathBuf, PathBuf> = HashMap::new();
     for (original_path, new_path) in &operations {
         let parent = original_path.parent().ok_or("Could not get parent directory")?;
-        let original_filename_str = original_path.file_name().unwrap().to_string_lossy();
-        let new_filename_str = new_path.file_name().unwrap().to_string_lossy();
+        let original_filename_str = original_path
+            .file_name()
+            .ok_or("Could not get original filename")?
+            .to_string_lossy();
+        let new_filename_str = new_path
+            .file_name()
+            .ok_or("Could not get new filename")?
+            .to_string_lossy();
 
         if let Ok(entries) = fs::read_dir(parent) {
             for entry in entries.filter_map(Result::ok) {

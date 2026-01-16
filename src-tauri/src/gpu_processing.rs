@@ -11,7 +11,10 @@ use crate::lut_processing::Lut;
 use crate::{AppState, GpuImageCache};
 
 pub fn get_or_init_gpu_context(state: &tauri::State<AppState>) -> Result<GpuContext, String> {
-    let mut context_lock = state.gpu_context.lock().unwrap();
+    let mut context_lock = state
+        .gpu_context
+        .lock()
+        .map_err(|e| format!("Failed to acquire GPU context lock: {}", e))?;
     if let Some(context) = &*context_lock {
         return Ok(context.clone());
     }
@@ -96,15 +99,18 @@ fn read_texture_data(
     let buffer_slice = output_buffer.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
     buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-        tx.send(result).unwrap();
+        // If send fails, the receiver will get an error when trying to recv
+        let _ = tx.send(result);
     });
     device
         .poll(wgpu::PollType::Wait {
             submission_index: None,
             timeout: Some(std::time::Duration::from_secs(60)),
         })
-        .unwrap();
-    rx.recv().unwrap().map_err(|e| e.to_string())?;
+        .map_err(|e| format!("GPU poll failed: {:?}", e))?;
+    rx.recv()
+        .map_err(|e| format!("Failed to receive GPU result: {}", e))?
+        .map_err(|e| e.to_string())?;
 
     let padded_data = buffer_slice.get_mapped_range().to_vec();
     output_buffer.unmap();
@@ -819,7 +825,10 @@ pub fn process_and_get_dynamic_image(
         return Ok(base_image.clone());
     }
 
-    let mut cache_lock = state.gpu_image_cache.lock().unwrap();
+    let mut cache_lock = state
+        .gpu_image_cache
+        .lock()
+        .map_err(|e| format!("Failed to acquire GPU image cache lock: {}", e))?;
 
     if let Some(cache) = &*cache_lock {
         if cache.transform_hash != transform_hash || cache.width != width || cache.height != height
@@ -861,7 +870,9 @@ pub fn process_and_get_dynamic_image(
         });
     }
 
-    let cache = cache_lock.as_ref().unwrap();
+    let cache = cache_lock
+        .as_ref()
+        .ok_or("GPU image cache unexpectedly empty")?;
 
     let processed_pixels = run_gpu_processing(
         context,

@@ -8,6 +8,7 @@ mod ai_processing;
 mod comfyui_connector;
 mod culling;
 mod denoising;
+mod errors;
 mod file_management;
 mod formats;
 mod gpu_processing;
@@ -364,7 +365,7 @@ fn read_exif_data(file_bytes: &[u8]) -> HashMap<String, String> {
 }
 
 fn get_or_load_lut(state: &tauri::State<AppState>, path: &str) -> Result<Arc<Lut>, String> {
-    let mut cache = state.lut_cache.lock().unwrap();
+    let mut cache = lock_or_err!(state.lut_cache, "LUT cache")?;
     if let Some(lut) = cache.get(path) {
         return Ok(lut.clone());
     }
@@ -438,9 +439,9 @@ async fn load_image(
     let (orig_width, orig_height) = pristine_img.dimensions();
     let is_raw = is_raw_file(&source_path_str);
 
-    *state.cached_preview.lock().unwrap() = None;
-    *state.gpu_image_cache.lock().unwrap() = None;
-    *state.original_image.lock().unwrap() = Some(LoadedImage {
+    *lock_or_err!(state.cached_preview, "cached preview")? = None;
+    *lock_or_err!(state.gpu_image_cache, "GPU image cache")? = None;
+    *lock_or_err!(state.original_image, "original image")? = Some(LoadedImage {
         path: source_path_str.clone(),
         image: pristine_img,
         is_raw,
@@ -543,12 +544,12 @@ fn apply_adjustments(
     let loaded_image = state
         .original_image
         .lock()
-        .unwrap()
+        .map_err(|e| format!("Original image lock failed: {}", e))?
         .clone()
         .ok_or("No original image loaded")?;
     let new_transform_hash = calculate_transform_hash(&adjustments_clone);
 
-    let mut cached_preview_lock = state.cached_preview.lock().unwrap();
+    let mut cached_preview_lock = lock_or_err!(state.cached_preview, "cached preview")?;
 
     let (final_preview_base, scale_for_gpu, unscaled_crop_offset) =
         if let Some(cached) = &*cached_preview_lock {
@@ -559,7 +560,7 @@ fn apply_adjustments(
                     cached.unscaled_crop_offset,
                 )
             } else {
-                *state.gpu_image_cache.lock().unwrap() = None;
+                *lock_or_err!(state.gpu_image_cache, "GPU image cache")? = None;
                 let (base, scale, offset) =
                     generate_transformed_preview(&loaded_image, &adjustments_clone, &app_handle)?;
                 *cached_preview_lock = Some(CachedPreview {
@@ -571,7 +572,7 @@ fn apply_adjustments(
                 (base, scale, offset)
             }
         } else {
-            *state.gpu_image_cache.lock().unwrap() = None;
+            *lock_or_err!(state.gpu_image_cache, "GPU image cache")? = None;
             let (base, scale, offset) =
                 generate_transformed_preview(&loaded_image, &adjustments_clone, &app_handle)?;
             *cached_preview_lock = Some(CachedPreview {
@@ -794,7 +795,7 @@ fn generate_original_transformed_preview(
 fn get_full_image_for_processing(
     state: &tauri::State<AppState>,
 ) -> Result<(DynamicImage, bool), String> {
-    let original_image_lock = state.original_image.lock().unwrap();
+    let original_image_lock = lock_or_err!(state.original_image, "original image")?;
     let loaded_image = original_image_lock
         .as_ref()
         .ok_or("No original image loaded")?;
@@ -1023,7 +1024,7 @@ async fn upscale_and_save_image(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
     let settings = {
-        let lock = state.original_image.lock().unwrap();
+        let lock = lock_or_err!(state.original_image, "original image")?;
         lock.as_ref()
             .map(|img| (img.image.clone(), img.is_raw))
             .ok_or_else(|| "No image loaded".to_string())?
@@ -1085,7 +1086,7 @@ async fn export_image(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    if state.export_task_handle.lock().unwrap().is_some() {
+    if lock_or_err!(state.export_task_handle, "export task handle")?.is_some() {
         return Err("An export is already in progress.".to_string());
     }
 
@@ -1141,14 +1142,14 @@ async fn export_image(
             let _ = app_handle.emit("export-complete", ());
         }
 
-        *app_handle
-            .state::<AppState>()
-            .export_task_handle
-            .lock()
-            .unwrap() = None;
+        if let Ok(mut handle) = app_handle.state::<AppState>().export_task_handle.lock() {
+            *handle = None;
+        } else {
+            log::error!("Failed to acquire export task handle lock for cleanup");
+        }
     });
 
-    *state.export_task_handle.lock().unwrap() = Some(task);
+    *lock_or_err!(state.export_task_handle, "export task handle")? = Some(task);
     Ok(())
 }
 
@@ -1161,7 +1162,7 @@ async fn batch_export_images(
     state: tauri::State<'_, AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-    if state.export_task_handle.lock().unwrap().is_some() {
+    if lock_or_err!(state.export_task_handle, "export task handle")?.is_some() {
         return Err("An export is already in progress.".to_string());
     }
 
@@ -1187,7 +1188,9 @@ async fn batch_export_images(
 
         if let Err(e) = pool_result {
             let _ = app_handle.emit("export-error", format!("Failed to initialize worker threads: {}", e));
-            *app_handle.state::<AppState>().export_task_handle.lock().unwrap() = None;
+            if let Ok(mut handle) = app_handle.state::<AppState>().export_task_handle.lock() {
+                *handle = None;
+            }
             return;
         }
         let pool = pool_result.unwrap();
@@ -1358,20 +1361,20 @@ async fn batch_export_images(
             let _ = app_handle.emit("export-complete", ());
         }
 
-        *app_handle
-            .state::<AppState>()
-            .export_task_handle
-            .lock()
-            .unwrap() = None;
+        if let Ok(mut handle) = app_handle.state::<AppState>().export_task_handle.lock() {
+            *handle = None;
+        } else {
+            log::error!("Failed to acquire export task handle lock for cleanup");
+        }
     });
 
-    *state.export_task_handle.lock().unwrap() = Some(task);
+    *lock_or_err!(state.export_task_handle, "export task handle")? = Some(task);
     Ok(())
 }
 
 #[tauri::command]
 fn cancel_export(state: tauri::State<AppState>) -> Result<(), String> {
-    match state.export_task_handle.lock().unwrap().take() {
+    match lock_or_err!(state.export_task_handle, "export task handle")?.take() {
         Some(handle) => {
             handle.abort();
             println!("Export task cancellation requested.");
@@ -1392,16 +1395,13 @@ async fn estimate_export_size(
     app_handle: tauri::AppHandle,
 ) -> Result<usize, String> {
     let context = get_or_init_gpu_context(&state)?;
-    let loaded_image = state
-        .original_image
-        .lock()
-        .unwrap()
+    let loaded_image = lock_or_err!(state.original_image, "original image")?
         .clone()
         .ok_or("No original image loaded")?;
     let is_raw = loaded_image.is_raw;
 
     let new_transform_hash = calculate_transform_hash(&js_adjustments);
-    let cached_preview_lock = state.cached_preview.lock().unwrap();
+    let cached_preview_lock = lock_or_err!(state.cached_preview, "cached preview")?;
 
     let (preview_image, scale, unscaled_crop_offset) = if let Some(cached) = &*cached_preview_lock {
         if cached.transform_hash == new_transform_hash {
@@ -2009,8 +2009,8 @@ async fn generate_ai_subject_mask(
         .map_err(|e| e.to_string())?;
 
     let embeddings = {
-        let mut ai_state_lock = state.ai_state.lock().unwrap();
-        let ai_state = ai_state_lock.as_mut().unwrap();
+        let mut ai_state_lock = lock_or_err!(state.ai_state, "AI state")?;
+        let ai_state = ai_state_lock.as_mut().ok_or("AI state not initialized")?;
 
         let mut hasher = blake3::Hasher::new();
         hasher.update(path.as_bytes());
@@ -2618,7 +2618,9 @@ async fn stitch_panorama(
                 let base64_str = general_purpose::STANDARD.encode(buf.get_ref());
                 let final_base64 = format!("data:image/png;base64,{}", base64_str);
 
-                *panorama_result_handle.lock().unwrap() = Some(panorama_image);
+                *panorama_result_handle
+                    .lock()
+                    .map_err(|e| format!("Panorama result lock failed: {}", e))? = Some(panorama_image);
 
                 let _ = app_handle.emit(
                     "panorama-complete",
@@ -2698,7 +2700,11 @@ async fn apply_denoising(
     tokio::task::spawn_blocking(move || {
         match denoising::denoise_image(path_str, intensity, app_handle.clone()) {
             Ok((image, _base64_ignored_in_this_handler_logic)) => {
-                *denoise_result_handle.lock().unwrap() = Some(image);
+                if let Ok(mut handle) = denoise_result_handle.lock() {
+                    *handle = Some(image);
+                } else {
+                    log::error!("Failed to acquire denoise result lock");
+                }
             }
             Err(e) => {
                 let _ = app_handle.emit("denoise-error", e);
@@ -2865,7 +2871,7 @@ async fn load_and_parse_lut(
     let lut = lut_processing::parse_lut_file(&path).map_err(|e| e.to_string())?;
     let lut_size = lut.size;
 
-    let mut cache = state.lut_cache.lock().unwrap();
+    let mut cache = lock_or_err!(state.lut_cache, "LUT cache")?;
     cache.insert(path, Arc::new(lut));
 
     Ok(LutParseResult { size: lut_size })
@@ -3007,7 +3013,7 @@ fn handle_file_open(app_handle: &tauri::AppHandle, path: PathBuf) {
 
 #[tauri::command]
 fn frontend_ready(app_handle: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
-    if let Some(path) = state.initial_file_path.lock().unwrap().take() {
+    if let Some(path) = lock_or_err!(state.initial_file_path, "initial file path")?.take() {
         log::info!("Frontend is ready, emitting open-with-file for initial path: {}", &path);
         handle_file_open(&app_handle, PathBuf::from(path));
     }
@@ -3045,7 +3051,11 @@ fn main() {
                 if let Some(arg) = std::env::args().nth(1) {
                      let state = app.state::<AppState>();
                      log::info!("Windows/Linux initial open: Storing path {} for later.", &arg);
-                     *state.initial_file_path.lock().unwrap() = Some(arg);
+                     if let Ok(mut path_lock) = state.initial_file_path.lock() {
+                         *path_lock = Some(arg);
+                     } else {
+                         log::error!("Failed to acquire initial file path lock during setup");
+                     }
                 }
             }
 
@@ -3221,8 +3231,12 @@ fn main() {
                     if let Ok(path) = url.to_file_path() {
                         if let Some(path_str) = path.to_str() {
                             let state = app_handle.state::<AppState>();
-                            *state.initial_file_path.lock().unwrap() = Some(path_str.to_string());
-                            log::info!("macOS initial open: Stored path {} for later.", path_str);
+                            if let Ok(mut path_lock) = state.initial_file_path.lock() {
+                                *path_lock = Some(path_str.to_string());
+                                log::info!("macOS initial open: Stored path {} for later.", path_str);
+                            } else {
+                                log::error!("Failed to acquire initial file path lock during macOS open event");
+                            }
                         }
                     }
                 }
