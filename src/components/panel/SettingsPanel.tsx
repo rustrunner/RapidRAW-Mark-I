@@ -1364,7 +1364,11 @@ export default function SettingsPanel({
                     <DataActionItem
                       buttonAction={async () => {
                         if (logPath && !logPath.startsWith('Could not')) {
-                          await invoke(Invokes.ShowInFinder, { path: logPath });
+                          try {
+                            await invoke(Invokes.ShowInFinder, { path: logPath });
+                          } catch (err) {
+                            console.error('Failed to open log file location:', err);
+                          }
                         }
                       }}
                       buttonText="Open Log File"
