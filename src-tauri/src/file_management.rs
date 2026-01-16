@@ -718,6 +718,13 @@ pub fn read_file_mapped(path: &Path) -> Result<Mmap, ReadFileError> {
     if file.try_lock_shared().is_err() {
         return Err(ReadFileError::Locked);
     }
+    // SAFETY: Memory-mapped file access is unsafe because:
+    // 1. The file could be modified by another process while mapped, causing undefined behavior
+    // 2. The file could be truncated, causing reads beyond the new end to fault
+    // We mitigate these risks by:
+    // - Acquiring a shared lock on the file (try_lock_shared above) to prevent concurrent writes
+    // - Reading the file length at map time to ensure we don't map beyond EOF
+    // - Only using the mmap for read operations (not writing back)
     let mmap = unsafe {
         MmapOptions::new()
             .len(file.metadata().map_err(ReadFileError::Io)?.len() as usize)

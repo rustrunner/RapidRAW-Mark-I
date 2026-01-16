@@ -3062,6 +3062,11 @@ fn main() {
             let app_handle = app.handle().clone();
             let settings: AppSettings = load_settings(app_handle.clone()).unwrap_or_default();
 
+            // SAFETY: std::env::set_var is unsafe since Rust 1.66 because it can cause data races
+            // if called while another thread is reading environment variables. This is safe here
+            // because we are in the Tauri setup() callback which runs on the main thread before
+            // any worker threads are spawned. All environment variables are set synchronously
+            // during application initialization.
             unsafe {
                 if let Some(backend) = &settings.processing_backend {
                     if backend != "auto" {
