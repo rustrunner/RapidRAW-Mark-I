@@ -899,9 +899,9 @@ git reset --hard origin/master  # Full rollback
 - [ ] TypeScript strict mode passes (stretch goal)
 
 ### Phase 5 Complete When:
-- [ ] Unnecessary `.clone()` calls reduced by 50%+
-- [ ] Image cache has eviction strategy
-- [ ] Memory usage stable during extended workflows
+- [~] Unnecessary `.clone()` calls reduced by 50%+ (reviewed - most are necessary for thread safety)
+- [x] Image cache has eviction strategy (LUT cache limited to 10 entries, GPU cache single-image, thumbnails disk-based)
+- [~] Memory usage stable during extended workflows (improved with cache limits)
 
 ---
 
@@ -1003,6 +1003,7 @@ export async function safeInvoke<T>(
 | 2026-01-15 | 2.1 | Claude Code | Implemented Phases 1.4, 2.1, 3.1, 3.3 - marked complete in Success Criteria |
 | 2026-01-16 | 2.2 | Claude Code | Implemented Phases 1.0, 1.1, 1.2, 1.3, 1.5, 3.2, 4.x (partial) - replaced 50 unwraps across 3 Rust files, documented unsafe blocks, added event types |
 | 2026-01-17 | 2.3 | Claude Code | Fixed split view sync, processing indicator, blur overlay; completed clippy cleanup (unwrap_or_default, window config) - Phase 1 complete |
+| 2026-01-17 | 2.4 | Claude Code | Removed all any types from SettingsPanel.tsx; added LUT cache eviction (max 10 entries) - Phases 4 & 5 progress |
 
 ---
 

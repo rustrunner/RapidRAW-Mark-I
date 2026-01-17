@@ -364,6 +364,8 @@ fn read_exif_data(file_bytes: &[u8]) -> HashMap<String, String> {
     exif_data
 }
 
+const MAX_LUT_CACHE_SIZE: usize = 10;
+
 fn get_or_load_lut(state: &tauri::State<AppState>, path: &str) -> Result<Arc<Lut>, String> {
     let mut cache = lock_or_err!(state.lut_cache, "LUT cache")?;
     if let Some(lut) = cache.get(path) {
@@ -372,6 +374,16 @@ fn get_or_load_lut(state: &tauri::State<AppState>, path: &str) -> Result<Arc<Lut
 
     let lut = lut_processing::parse_lut_file(path).map_err(|e| e.to_string())?;
     let arc_lut = Arc::new(lut);
+
+    // Evict oldest entries if cache is full (simple FIFO eviction)
+    while cache.len() >= MAX_LUT_CACHE_SIZE {
+        if let Some(oldest_key) = cache.keys().next().cloned() {
+            cache.remove(&oldest_key);
+        } else {
+            break;
+        }
+    }
+
     cache.insert(path.to_string(), arc_lut.clone());
     Ok(arc_lut)
 }
