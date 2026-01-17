@@ -1,3 +1,62 @@
+# What's New in Mark I
+
+### Low-Light Processing Panel
+
+- Hot Pixel Removal - Detect and remove hot/stuck pixels with adjustable
+  threshold and search radius
+- ISO-Adaptive Denoising - Intelligent noise reduction that automatically
+  adjusts strength based on image ISO metadata, with manual override options
+
+### Blur Recovery Panel
+
+- Smart Deblurring - Mathematical deconvolution-based blur recovery using the
+  PID (Pseudo-Inverse Deconvolution) algorithm
+- Motion Blur Correction - Specify blur angle and length to recover detail
+  from motion-blurred images
+- Out-of-Focus Blur Recovery - Specify blur radius to recover detail from
+  defocused images
+- Interactive Angle Overlay - Visual indicator showing blur direction for
+  precise motion blur correction
+
+### Upscaling Panel (Final Step)
+
+- 2x Lanczos Upscaling - High-quality image upscaling using the Lanczos
+  resampling algorithm
+- Upscale applies all current adjustments before scaling
+- Upscale panel added to bottom of controls (intended as final processing step)
+- Proper file format handling for RAW files (saves as PNG)
+
+### Memory & Performance
+
+- Added LUT cache eviction strategy (max 10 entries) to prevent memory bloat
+
+### Stability & Error Handling
+
+- Added proper error handling throughout Rust backend (removed unsafe unwraps)
+- Replaced GPU cache mutex locks with graceful error handling
+- Added crash prevention for corrupt/malformed files
+- Documented unsafe blocks with safety comments
+- Fixed window config initialization error handling
+
+### Code Quality
+
+- Removed all TypeScript 'any' types from SettingsPanel
+- Added type definitions for Tauri event payloads
+- Completed Clippy cleanup (unwrap_or_default patterns)
+- Fixed Switch component not using id prop
+
+### UI Changes
+
+- Removed "preview disabled" toggle from all panels
+- Added "accordian style" panels
+
+Credits
+======================================================
+
+Original RapidRAW by CyberTimon (https://github.com/CyberTimon/RapidRAW)
+Mark1 modifications by rustrunner
+
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/CyberTimon/RapidRAW/assets/.github/assets/editor.png" alt="RapidRAW Editor">
 </p>
