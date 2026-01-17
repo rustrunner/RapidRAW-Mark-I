@@ -3131,7 +3131,8 @@ function App() {
 
   const handleResetAdjustments = useCallback(
     (paths?: Array<string>) => {
-      const pathsToReset = paths || multiSelectedPaths;
+      const pathsToReset =
+        paths || (multiSelectedPaths.length > 0 ? multiSelectedPaths : selectedImage ? [selectedImage.path] : []);
       if (pathsToReset.length === 0) {
         return;
       }

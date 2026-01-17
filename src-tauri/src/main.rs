@@ -1068,18 +1068,19 @@ async fn upscale_and_save_image(
         .unwrap_or("png");
     let parent = source_path.parent().unwrap_or(Path::new("."));
 
-    let new_filename = format!("{}_upscaled.{}", stem, extension);
+    let ext_lower = extension.to_lowercase();
+    let (output_ext, format) = match ext_lower.as_str() {
+        "jpg" | "jpeg" => ("jpg", ImageFormat::Jpeg),
+        "png" => ("png", ImageFormat::Png),
+        "webp" => ("webp", ImageFormat::WebP),
+        "tiff" | "tif" => ("tiff", ImageFormat::Tiff),
+        // RAW formats - save as PNG since we can't write RAW
+        _ => ("png", ImageFormat::Png),
+    };
+
+    let new_filename = format!("{}_upscaled.{}", stem, output_ext);
     let output_path = parent.join(&new_filename);
     let output_path_str = output_path.to_string_lossy().to_string();
-
-    let ext_lower = extension.to_lowercase();
-    let format = match ext_lower.as_str() {
-        "jpg" | "jpeg" => ImageFormat::Jpeg,
-        "png" => ImageFormat::Png,
-        "webp" => ImageFormat::WebP,
-        "tiff" | "tif" => ImageFormat::Tiff,
-        _ => ImageFormat::Png,
-    };
 
     upscaled
         .save_with_format(&output_path, format)
