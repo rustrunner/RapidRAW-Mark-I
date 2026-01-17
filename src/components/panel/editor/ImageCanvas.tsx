@@ -504,10 +504,6 @@ const ImageCanvas = memo(
     const imagePathRef = useRef<string | null>(null);
     const latestEditedUrlRef = useRef<string | null>(null);
 
-    // Track original URL for split view
-    const [splitViewOriginalUrl, setSplitViewOriginalUrl] = useState<string | null>(null);
-    const lastImagePathRef = useRef<string | null>(null);
-
     const isDrawing = useRef(false);
     const currentLine = useRef<DrawnLine | null>(null);
     const [previewLine, setPreviewLine] = useState<DrawnLine | null>(null);
@@ -632,21 +628,6 @@ const ImageCanvas = memo(
         return () => clearTimeout(timer);
       }
     }, [layers]);
-
-    // Sync split view original with current image - use finalPreviewUrl as source of truth
-    useEffect(() => {
-      const currentPath = selectedImage.path;
-      const imageChanged = currentPath !== lastImagePathRef.current;
-
-      if (imageChanged) {
-        lastImagePathRef.current = currentPath;
-        // When image changes, use finalPreviewUrl for both panes (they should match)
-        setSplitViewOriginalUrl(finalPreviewUrl);
-      } else if (splitViewOriginalUrl === null && finalPreviewUrl) {
-        // If we don't have an original yet, capture the current preview
-        setSplitViewOriginalUrl(finalPreviewUrl);
-      }
-    }, [selectedImage.path, finalPreviewUrl, splitViewOriginalUrl]);
 
     const handleTransitionEnd = useCallback((finishedId: string) => {
       setLayers((prev: Array<ImageLayer>) => {
@@ -1091,13 +1072,14 @@ const ImageCanvas = memo(
           >
             {/* Split View Mode */}
             {splitView ? (
-              <div className="absolute inset-0 w-full h-full flex">
-                {/* Original Image (Left) - captured when image loads */}
+              <div className="absolute inset-0 w-full h-full flex" key={`split-${selectedImage.path}`}>
+                {/* Original Image (Left) - uses transformedOriginalUrl for true original */}
                 <div className="w-1/2 h-full relative overflow-hidden border-r border-white/20">
                   <img
                     alt="Original"
                     className="absolute inset-0 w-full h-full object-contain"
-                    src={splitViewOriginalUrl || finalPreviewUrl || ''}
+                    key={`original-${selectedImage.path}-${transformedOriginalUrl || 'loading'}`}
+                    src={transformedOriginalUrl || finalPreviewUrl || ''}
                     style={{
                       imageRendering: 'high-quality',
                       WebkitImageRendering: 'high-quality',
@@ -1112,6 +1094,7 @@ const ImageCanvas = memo(
                   <img
                     alt="Edited"
                     className="absolute inset-0 w-full h-full object-contain"
+                    key={`edited-${selectedImage.path}-${finalPreviewUrl || 'loading'}`}
                     src={fullResolutionUrl || finalPreviewUrl || ''}
                     style={{
                       imageRendering: 'high-quality',
@@ -1121,6 +1104,23 @@ const ImageCanvas = memo(
                   <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                     Edited
                   </div>
+                  {/* Processing Indicator for split view - positioned in right pane */}
+                  {isAdjusting && (
+                    <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10">
+                      <div className="bg-black/80 rounded-lg px-4 py-2 flex items-center gap-3">
+                        <div className="w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full animate-pulse"
+                            style={{
+                              width: '100%',
+                              animation: 'processing-bar 1s ease-in-out infinite',
+                            }}
+                          />
+                        </div>
+                        <span className="text-white text-xs font-medium">Processing...</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1166,8 +1166,8 @@ const ImageCanvas = memo(
             )}
           </div>
 
-          {/* Blur Angle Overlay - shows direction indicator when adjusting blur angle */}
-          {adjustments.deblurShowAngleOverlay && adjustments.deblurEnabled && adjustments.deblurType === 'motion' && (
+          {/* Blur Angle Overlay - shows direction indicator when adjusting blur angle (not in split view) */}
+          {!splitView && adjustments.deblurShowAngleOverlay && adjustments.deblurEnabled && adjustments.deblurType === 'motion' && (
             <div
               className="absolute pointer-events-none"
               style={{
@@ -1220,8 +1220,8 @@ const ImageCanvas = memo(
             </div>
           )}
 
-          {/* Processing Indicator - shows when adjustments are being applied */}
-          {isAdjusting && (
+          {/* Processing Indicator - shows when adjustments are being applied (not in split view - split view has its own) */}
+          {!splitView && isAdjusting && (
             <div
               className="absolute pointer-events-none"
               style={{

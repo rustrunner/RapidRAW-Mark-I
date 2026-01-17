@@ -594,7 +594,7 @@ fn apply_adjustments(
         let mask_definitions: Vec<MaskDefinition> = js_adjustments
             .get("masks")
             .and_then(|m| serde_json::from_value(m.clone()).ok())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         let scaled_crop_offset = (
             unscaled_crop_offset.0 * scale_for_gpu,
@@ -709,7 +709,7 @@ fn generate_uncropped_preview(
         let mask_definitions: Vec<MaskDefinition> = js_adjustments
             .get("masks")
             .and_then(|m| serde_json::from_value(m.clone()).ok())
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
             .iter()
@@ -828,7 +828,7 @@ fn generate_fullscreen_preview(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
         .iter()
@@ -891,7 +891,7 @@ fn process_image_for_export(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
         .iter()
@@ -1427,7 +1427,7 @@ async fn estimate_export_size(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     let scaled_crop_offset = (
         unscaled_crop_offset.0 * scale,
@@ -1590,7 +1590,7 @@ async fn estimate_batch_export_size(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
         .iter()
@@ -2160,7 +2160,7 @@ fn generate_preset_preview(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
         .iter()
@@ -2478,7 +2478,7 @@ async fn generate_all_community_previews(
             let mask_definitions: Vec<MaskDefinition> = js_adjustments
                 .get("masks")
                 .and_then(|m| serde_json::from_value(m.clone()).ok())
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
 
             let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
                 .iter()
@@ -2835,7 +2835,7 @@ fn generate_preview_for_path(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
     let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
         .iter()
         .filter_map(|def| generate_mask_bitmap(def, img_w, img_h, 1.0, unscaled_crop_offset))
@@ -3112,17 +3112,19 @@ fn main() {
                 }
             }
 
-            let window_cfg = app.config().app.windows.get(0).unwrap().clone();
+            let window_cfg = app.config().app.windows.get(0)
+                .ok_or("No window configuration found in tauri.conf.json")?
+                .clone();
             let transparent = settings.transparent.unwrap_or(window_cfg.transparent);
             let decorations = settings.decorations.unwrap_or(window_cfg.decorations);
 
             let window = tauri::WebviewWindowBuilder::from_config(app.handle(), &window_cfg)
-                .unwrap()
+                .map_err(|e| format!("Failed to create window builder: {}", e))?
                 .title("RapidRAW Mod1")
                 .transparent(transparent)
                 .decorations(decorations)
                 .build()
-                .expect("Failed to build window");
+                .map_err(|e| format!("Failed to build window: {}", e))?;
 
             if transparent {
                 let theme = settings.theme.unwrap_or("dark".to_string());

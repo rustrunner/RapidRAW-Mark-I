@@ -844,7 +844,7 @@ pub fn generate_thumbnail_data(
                 .adjustments
                 .get("masks")
                 .and_then(|m| serde_json::from_value(m.clone()).ok())
-                .unwrap_or_else(Vec::new);
+                .unwrap_or_default();
 
             let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
                 .iter()
@@ -1745,7 +1745,7 @@ pub fn set_color_label_for_paths(paths: Vec<String>, color: Option<String>) -> R
             ImageMetadata::default()
         };
 
-        let mut tags = metadata.tags.unwrap_or_else(Vec::new);
+        let mut tags = metadata.tags.unwrap_or_default();
         tags.retain(|tag| !tag.starts_with(COLOR_TAG_PREFIX));
 
         if let Some(c) = &color {

@@ -422,7 +422,7 @@ fn modify_tags_for_path(path_str: &str, modify_fn: impl Fn(&mut Vec<String>)) ->
         ImageMetadata::default()
     };
 
-    let mut tags = metadata.tags.unwrap_or_else(Vec::new);
+    let mut tags = metadata.tags.unwrap_or_default();
     modify_fn(&mut tags);
 
     tags.sort_unstable();

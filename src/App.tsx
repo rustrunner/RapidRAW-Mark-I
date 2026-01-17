@@ -531,10 +531,19 @@ function App() {
 
   const transformedOriginalPathRef = useRef<string | null>(null);
 
+  // Clear transformed original when geometric adjustments change
   useEffect(() => {
     setTransformedOriginalUrl(null);
     transformedOriginalPathRef.current = null;
   }, [geometricAdjustmentsKey]);
+
+  // Clear transformed original immediately when selected image changes
+  useEffect(() => {
+    if (selectedImage?.path !== transformedOriginalPathRef.current) {
+      setTransformedOriginalUrl(null);
+      transformedOriginalPathRef.current = null;
+    }
+  }, [selectedImage?.path]);
 
   useEffect(() => {
     let isEffectActive = true;
@@ -542,7 +551,8 @@ function App() {
 
     const generate = async () => {
       // Generate transformed original when showing original OR when split view is active
-      const needsNewOriginal = (showOriginal || splitView) && selectedImage?.path;
+      // IMPORTANT: Only generate when selectedImage.isReady to ensure backend has loaded the new image
+      const needsNewOriginal = (showOriginal || splitView) && selectedImage?.path && selectedImage?.isReady;
       const pathChanged = selectedImage?.path !== transformedOriginalPathRef.current;
 
       if (needsNewOriginal && (pathChanged || !transformedOriginalUrl)) {
@@ -577,7 +587,7 @@ function App() {
     return () => {
       isEffectActive = false;
     };
-  }, [showOriginal, splitView, selectedImage?.path, adjustments, transformedOriginalUrl]);
+  }, [showOriginal, splitView, selectedImage?.path, selectedImage?.isReady, adjustments, transformedOriginalUrl]);
 
   useEffect(() => {
     if (currentFolderPath) {

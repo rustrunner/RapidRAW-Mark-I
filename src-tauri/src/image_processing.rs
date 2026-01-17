@@ -1172,7 +1172,7 @@ pub fn get_all_adjustments_from_json(
     let mask_definitions: Vec<MaskDefinition> = js_adjustments
         .get("masks")
         .and_then(|m| serde_json::from_value(m.clone()).ok())
-        .unwrap_or_else(Vec::new);
+        .unwrap_or_default();
 
     for (i, mask_def) in mask_definitions
         .iter()
