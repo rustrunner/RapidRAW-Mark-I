@@ -2001,7 +2001,10 @@ function App() {
     }
     setIsUpscaling(true);
     try {
-      const newPath: string = await invoke(Invokes.UpscaleAndSaveImage, { path: selectedImage.path });
+      const newPath: string = await invoke(Invokes.UpscaleAndSaveImage, {
+        path: selectedImage.path,
+        jsAdjustments: adjustments,
+      });
       // Load the new upscaled image
       setSelectedImage({
         exif: null,

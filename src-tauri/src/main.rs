@@ -1033,22 +1033,62 @@ fn encode_image_to_bytes(
 #[tauri::command]
 async fn upscale_and_save_image(
     path: String,
+    js_adjustments: Value,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
-    let settings = {
-        let lock = lock_or_err!(state.original_image, "original image")?;
-        lock.as_ref()
-            .map(|img| (img.image.clone(), img.is_raw))
-            .ok_or_else(|| "No image loaded".to_string())?
-    };
-    let (original_image, _is_raw) = settings;
+    let context = get_or_init_gpu_context(&state)?;
+    let (original_image_data, is_raw) = get_full_image_for_processing(&state)?;
 
-    let (w, h) = original_image.dimensions();
+    // Composite AI patches if any
+    let base_image = composite_patches_on_image(&original_image_data, &js_adjustments)
+        .map_err(|e| format!("Failed to composite AI patches: {}", e))?;
+
+    // Apply transformations (crop, rotation, etc.)
+    let (transformed_image, unscaled_crop_offset) =
+        apply_all_transformations(&base_image, &js_adjustments);
+
+    let (img_w, img_h) = transformed_image.dimensions();
+
+    // Generate mask bitmaps
+    let mask_definitions: Vec<MaskDefinition> = js_adjustments
+        .get("masks")
+        .and_then(|m| serde_json::from_value(m.clone()).ok())
+        .unwrap_or_default();
+
+    let mask_bitmaps: Vec<ImageBuffer<Luma<u8>, Vec<u8>>> = mask_definitions
+        .iter()
+        .filter_map(|def| generate_mask_bitmap(def, img_w, img_h, 1.0, unscaled_crop_offset))
+        .collect();
+
+    // Get adjustments and disable clipping indicator
+    let mut all_adjustments = get_all_adjustments_from_json(&js_adjustments, is_raw);
+    all_adjustments.global.show_clipping = 0;
+
+    // Load LUT if specified
+    let lut_path = js_adjustments["lutPath"].as_str();
+    let lut = lut_path.and_then(|p| get_or_load_lut(&state, p).ok());
+
+    let unique_hash = calculate_full_job_hash(&path, &js_adjustments);
+
+    // Process image through GPU pipeline
+    let processed_image = process_and_get_dynamic_image(
+        &context,
+        &state,
+        &transformed_image,
+        unique_hash,
+        all_adjustments,
+        &mask_bitmaps,
+        lut,
+        "upscale_and_save_image",
+    )?;
+
+    // Now upscale the processed image
+    let (w, h) = processed_image.dimensions();
     log::info!("Upscaling image: {}x{} -> {}x{}", w, h, w * 2, h * 2);
 
     let upscaled = tokio::task::spawn_blocking(move || {
         DynamicImage::ImageRgba8(image::imageops::resize(
-            &original_image,
+            &processed_image,
             w * 2,
             h * 2,
             image::imageops::FilterType::Lanczos3,
@@ -1057,6 +1097,7 @@ async fn upscale_and_save_image(
     .await
     .map_err(|e| format!("Upscale task failed: {}", e))?;
 
+    // Determine output path and format
     let source_path = Path::new(&path);
     let stem = source_path
         .file_stem()

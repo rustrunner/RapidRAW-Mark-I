@@ -708,9 +708,6 @@ export const ADJUSTMENT_SECTIONS: Sections = {
     Effect.VignetteMidpoint,
     Effect.VignetteRoundness,
   ],
-  upscale: [
-    BlurRecoveryAdjustment.Upscale2xEnabled,
-  ],
   lowlight: [
     LowLightAdjustment.HotPixelEnabled,
     LowLightAdjustment.HotPixelThreshold,
@@ -735,5 +732,8 @@ export const ADJUSTMENT_SECTIONS: Sections = {
     BlurRecoveryAdjustment.DeblurShowKernel,
     BlurRecoveryAdjustment.DeblurIterations,
     // Note: DeblurShowAngleOverlay is frontend-only, not sent to backend
+  ],
+  upscale: [
+    BlurRecoveryAdjustment.Upscale2xEnabled,
   ],
 };
