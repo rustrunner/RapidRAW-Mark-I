@@ -31,7 +31,8 @@ import Switch from '../ui/Switch';
 import Input from '../ui/Input';
 import Slider from '../ui/Slider';
 import { ThemeProps, THEMES, DEFAULT_THEME_ID } from '../../utils/themes';
-import { Invokes } from '../ui/AppProperties';
+import { Invokes, AppSettings, ComfyUIWorkflowConfig } from '../ui/AppProperties';
+import { LucideIcon } from 'lucide-react';
 
 interface ConfirmModalState {
   confirmText: string;
@@ -45,9 +46,9 @@ interface ConfirmModalState {
 interface DataActionItemProps {
   buttonAction(): void;
   buttonText: string;
-  description: any;
+  description: React.ReactNode;
   disabled?: boolean;
-  icon: any;
+  icon: LucideIcon;
   isProcessing: boolean;
   message: string;
   title: string;
@@ -59,16 +60,16 @@ interface KeybindItemProps {
 }
 
 interface SettingItemProps {
-  children: any;
+  children: React.ReactNode;
   description?: string;
   label: string;
 }
 
 interface SettingsPanelProps {
-  appSettings: any;
+  appSettings: AppSettings | null;
   onBack(): void;
   onLibraryRefresh(): void;
-  onSettingsChange(settings: any): void;
+  onSettingsChange(settings: AppSettings): void;
   rootPath: string | null;
 }
 
@@ -174,8 +175,8 @@ const DataActionItem = ({
   </div>
 );
 
-const ExternalLink = ({ href, children, className }: { href: string; children: any; className?: string }) => {
-  const handleClick = async (e: any) => {
+const ExternalLink = ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => {
+  const handleClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     try {
       await openLink(href);
@@ -196,14 +197,21 @@ const ExternalLink = ({ href, children, className }: { href: string; children: a
   );
 };
 
-const ModelConfigItem = ({ label, data, onChange, description }: any) => {
+interface ModelConfigItemProps {
+  label: string;
+  data: Record<string, string> | null;
+  onChange: (data: Record<string, string>) => void;
+  description?: string;
+}
+
+const ModelConfigItem = ({ label, data, onChange, description }: ModelConfigItemProps) => {
   const [[key, value] = ['', '']] = Object.entries(data || {});
 
-  const handleKeyChange = (newKey: any) => {
+  const handleKeyChange = (newKey: string) => {
     onChange({ [newKey]: value });
   };
 
-  const handleValueChange = (newValue: any) => {
+  const handleValueChange = (newValue: string) => {
     onChange({ [key]: newValue });
   };
 
@@ -343,12 +351,12 @@ export default function SettingsPanel({
     fetchLogPath();
   }, []);
 
-  const handleProcessingSettingChange = (key: string, value: any) => {
+  const handleProcessingSettingChange = (key: string, value: string | number | boolean) => {
     setProcessingSettings((prev) => ({ ...prev, [key]: value }));
     if (key === 'processingBackend' || key === 'linuxGpuOptimization') {
       setRestartRequired(true);
     } else {
-      onSettingsChange({ ...appSettings, [key]: value });
+      onSettingsChange({ ...appSettings, [key]: value } as AppSettings);
     }
   };
 
@@ -370,8 +378,8 @@ export default function SettingsPanel({
     onSettingsChange({ ...appSettings, aiProvider: provider });
   };
 
-  const handleConfigChange = (field: any, value: any) => {
-    setComfyConfig((prev: any) => ({ ...prev, [field]: value }));
+  const handleConfigChange = (field: keyof ComfyUIWorkflowConfig, value: ComfyUIWorkflowConfig[keyof ComfyUIWorkflowConfig]) => {
+    setComfyConfig((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSaveComfyConfig = () => {
@@ -407,7 +415,7 @@ export default function SettingsPanel({
       const count: number = await invoke(Invokes.ClearAllSidecars, { rootPath: effectiveRootPath });
       setClearMessage(`${count} sidecar files deleted successfully.`);
       onLibraryRefresh();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to clear sidecars:', err);
       setClearMessage(`Error: ${err}`);
     } finally {
@@ -437,7 +445,7 @@ export default function SettingsPanel({
       const count: number = await invoke(Invokes.ClearAiTags, { rootPath: effectiveRootPath });
       setAiTagsClearMessage(`${count} files updated. AI tags removed.`);
       onLibraryRefresh();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to clear AI tags:', err);
       setAiTagsClearMessage(`Error: ${err}`);
     } finally {
@@ -467,7 +475,7 @@ export default function SettingsPanel({
       const count: number = await invoke(Invokes.ClearAllTags, { rootPath: effectiveRootPath });
       setTagsClearMessage(`${count} files updated. All non-color tags removed.`);
       onLibraryRefresh();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to clear tags:', err);
       setTagsClearMessage(`Error: ${err}`);
     } finally {
@@ -520,7 +528,7 @@ export default function SettingsPanel({
       await invoke(Invokes.ClearThumbnailCache);
       setCacheClearMessage('Thumbnail cache cleared successfully.');
       onLibraryRefresh();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to clear thumbnail cache:', err);
       setCacheClearMessage(`Error: ${err}`);
     } finally {
@@ -650,7 +658,7 @@ export default function SettingsPanel({
                   <div className="space-y-6">
                     <SettingItem label="Theme" description="Change the look and feel of the application.">
                       <Dropdown
-                        onChange={(value: any) => onSettingsChange({ ...appSettings, theme: value })}
+                        onChange={(value: string) => onSettingsChange({ ...appSettings, theme: value } as AppSettings)}
                         options={THEMES.map((theme: ThemeProps) => ({ value: theme.id, label: theme.name }))}
                         value={appSettings?.theme || DEFAULT_THEME_ID}
                       />
@@ -891,7 +899,7 @@ export default function SettingsPanel({
                       label="Preview Resolution"
                     >
                       <Dropdown
-                        onChange={(value: any) => handleProcessingSettingChange('editorPreviewResolution', value)}
+                        onChange={(value: number) => handleProcessingSettingChange('editorPreviewResolution', value)}
                         options={resolutions}
                         value={processingSettings.editorPreviewResolution}
                       />
@@ -920,7 +928,7 @@ export default function SettingsPanel({
                         step={0.1}
                         value={processingSettings.rawHighlightCompression}
                         defaultValue={2.5}
-                        onChange={(e: any) =>
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           handleProcessingSettingChange('rawHighlightCompression', parseFloat(e.target.value))
                         }
                       />
@@ -931,7 +939,7 @@ export default function SettingsPanel({
                       description="Select the graphics API. 'Auto' is recommended. May fix crashes on some systems."
                     >
                       <Dropdown
-                        onChange={(value: any) => handleProcessingSettingChange('processingBackend', value)}
+                        onChange={(value: string) => handleProcessingSettingChange('processingBackend', value)}
                         options={backendOptions}
                         value={processingSettings.processingBackend}
                       />
@@ -1022,9 +1030,9 @@ export default function SettingsPanel({
                                 <Input
                                   className="flex-grow"
                                   id="comfyui-address"
-                                  onBlur={() => onSettingsChange({ ...appSettings, comfyuiAddress: comfyUiAddress })}
-                                  onChange={(e: any) => setComfyUiAddress(e.target.value)}
-                                  onKeyDown={(e: any) => e.stopPropagation()}
+                                  onBlur={() => onSettingsChange({ ...appSettings, comfyuiAddress: comfyUiAddress } as AppSettings)}
+                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setComfyUiAddress(e.target.value)}
+                                  onKeyDown={(e: React.KeyboardEvent) => e.stopPropagation()}
                                   placeholder="127.0.0.1:8188"
                                   type="text"
                                   value={comfyUiAddress}
@@ -1215,7 +1223,7 @@ export default function SettingsPanel({
                                         <ModelConfigItem
                                           label="Checkpoint"
                                           data={comfyConfig.modelCheckpoints}
-                                          onChange={(newData: any) =>
+                                          onChange={(newData: Record<string, string>) =>
                                             handleConfigChange('modelCheckpoints', newData)
                                           }
                                           description={
@@ -1232,7 +1240,7 @@ export default function SettingsPanel({
                                         <ModelConfigItem
                                           label="VAE"
                                           data={comfyConfig.vaeLoaders}
-                                          onChange={(newData: any) => handleConfigChange('vaeLoaders', newData)}
+                                          onChange={(newData: Record<string, string>) => handleConfigChange('vaeLoaders', newData)}
                                           description={
                                             !comfyConfig.workflowPath && (
                                               <>
@@ -1247,7 +1255,7 @@ export default function SettingsPanel({
                                         <ModelConfigItem
                                           label="ControlNet"
                                           data={comfyConfig.controlnetLoaders}
-                                          onChange={(newData: any) =>
+                                          onChange={(newData: Record<string, string>) =>
                                             handleConfigChange('controlnetLoaders', newData)
                                           }
                                           description={
